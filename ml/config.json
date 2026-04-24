@@ -1,0 +1,12 @@
+{
+  "task_type": "regression",
+  "model_type": "random_forest",
+  "confidence_level": 0.95,
+  "random_state": 42,
+  "model_params": {
+    "n_estimators": 300,
+    "max_depth": 14,
+    "min_samples_split": 4,
+    "n_jobs": -1
+  }
+}

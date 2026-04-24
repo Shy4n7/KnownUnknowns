@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pkl
+*.egg-info/
+.env
+.venv/
+venv/
+dist/
+build/
+.streamlit/
