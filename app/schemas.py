@@ -38,3 +38,6 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     calibrated: bool
     task_type: str
+    features: list[str] | None = None
+    margin: float | None = None
+    confidence_level: float | None = None

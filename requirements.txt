@@ -5,3 +5,5 @@ scikit-learn==1.5.2
 numpy==1.26.4
 streamlit==1.40.2
 requests==2.32.3
+pytest==9.0.2
+httpx==0.28.1

@@ -15,7 +15,7 @@ def run_predict(features: HouseFeatures) -> PredictResponse:
     wrapper = get_wrapper()
     result = wrapper.predict(np.array(features.to_array()))
     pred = result["prediction"]
-    logger.info("predict | $%,.0f", pred)
+    logger.info("predict | $%.0f", pred)
     return PredictResponse(prediction=round(pred, 2), prediction_usd=_fmt(pred))
 
 

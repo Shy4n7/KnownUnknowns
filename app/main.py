@@ -44,6 +44,9 @@ app.add_middleware(
 )
 
 
+FEATURE_NAMES = ["GrLivArea", "BedroomAbvGr", "FullBath", "OverallQual", "YearBuilt"]
+
+
 @app.get("/health", response_model=HealthResponse, tags=["meta"])
 def health():
     try:
@@ -53,6 +56,9 @@ def health():
             model_loaded=True,
             calibrated=w._q is not None,
             task_type=w.task_type,
+            features=FEATURE_NAMES,
+            margin=round(w._q, 2) if w._q is not None else None,
+            confidence_level=round(1.0 - w.alpha, 2),
         )
     except RuntimeError:
         return HealthResponse(status="degraded", model_loaded=False, calibrated=False, task_type="unknown")
