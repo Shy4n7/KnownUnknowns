@@ -1,73 +1,81 @@
 # KnownUnknowns
 
-**Model-Agnostic Uncertainty-Aware Prediction System**
+**Model-agnostic uncertainty-aware house price prediction system**
+
+KnownUnknowns wraps a trained regression model with conformal prediction so the API can return both a point estimate and a statistically calibrated uncertainty interval.
 
 ---
 
 ## The Problem: A Number Without a Margin is a Guess
 
-A model that predicts "$420,000" for a house gives you an answer, but not the honest one. Two neighbourhoods can both receive "$420,000" — one where the model has seen thousands of similar blocks and is quietly confident to within $40k, another where the features are unusual and the true value could be anywhere between $250k and $600k.
+A model that predicts "$240,000" for a house gives you an answer, but not the whole answer. Two houses can receive similar estimates while having very different levels of uncertainty: one may look like thousands of homes in the training data, while another may combine unusual size, age, condition, and room counts.
 
-Accuracy metrics measure average performance across a test set. They say nothing about the uncertainty of *any individual prediction*. In real estate, finance, medicine, and safety-critical systems, knowing *how much to trust* a prediction is as important as the prediction itself.
+Standard accuracy metrics measure average performance across a test set. They do not explain how much to trust any individual prediction. For real estate and other decision-heavy systems, the uncertainty around a prediction matters as much as the prediction itself.
 
 ---
 
 ## The Solution: Conformal Prediction
 
-Conformal prediction wraps any trained model and produces a **coverage-guaranteed interval** (regression) or **prediction set** (classification) — a range of outcomes that is statistically guaranteed to contain the true value with a user-specified probability (default: 95%).
+Conformal prediction wraps a trained model and produces a **coverage-calibrated interval** for regression. For this project, the default target coverage is 95%.
 
-The guarantee is **non-parametric and distribution-free**: no assumptions about the data distribution are needed.
+The guarantee is non-parametric and distribution-free under the usual conformal assumption that calibration and future examples are exchangeable.
 
-### How it works — Regression
+### How It Works
 
-1. **Train** a model on 60% of the data (model never sees calibration or test splits).
-2. **Calibrate** on a separate 20% hold-out:
-   - Compute absolute residuals: `score = |true_price − predicted_price|`
-   - Find the 95th-percentile residual → **margin q**
-3. **At test time**: interval = `[prediction − q, prediction + q]`
+1. **Train** a model on 60% of the data.
+2. **Calibrate** on a separate 20% hold-out set:
+   - Compute absolute residuals: `score = |true_price - predicted_price|`
+   - Find the conformal quantile -> margin `q`
+3. **Predict** on new inputs:
+   - Point estimate: `prediction`
+   - Interval: `[prediction - q, prediction + q]`
 
-Across all future predictions, at least 95% of intervals will contain the true value. This is a hard statistical guarantee.
+On held-out data, the interval is expected to contain the true sale price at approximately the configured confidence level.
 
-### How it works — Classification (kept from v1)
+---
 
-1. Calibration score = `1 − P(true_class | x)` per calibration sample.
-2. Find (1−α) quantile → threshold **τ**.
-3. At test time: include class `c` in prediction set if `1 − P(c|x) ≤ τ`.
+## Current Dataset
 
-### Interval interpretation
+The current implementation trains on the **Ames Housing** dataset from OpenML (`house_prices`). It predicts individual house sale prices in dollars.
 
-| Interval width | Meaning |
-|---------------|---------|
-| Narrow (< $80k) | Model is confident — neighbourhood is well-represented in training data |
-| Moderate ($80k–$160k) | Typical uncertainty — use the point estimate with normal caution |
-| Wide (> $160k) | Model is uncertain — features are unusual or conflicting; seek additional signals |
+### Input Features
+
+| Feature | Description |
+|---------|-------------|
+| `GrLivArea` | Above-ground living area in square feet |
+| `BedroomAbvGr` | Number of bedrooms above grade |
+| `FullBath` | Number of full bathrooms |
+| `OverallQual` | Overall material and finish quality, from 1 to 10 |
+| `YearBuilt` | Original construction year |
 
 ---
 
 ## Architecture
 
-```
+```text
 KnownUnknowns/
-├── ml/
-│   ├── config.json       ← task_type, model_type, confidence_level, model_params
-│   ├── wrapper.py        ← UncertaintyWrapper (model-agnostic conformal layer)
-│   ├── train.py          ← reads config, trains model, calibrates wrapper, saves wrapper.pkl
-│   ├── conformal.py      ← re-exports UncertaintyWrapper for backwards compatibility
-│   ├── wrapper.pkl       ← serialised trained + calibrated wrapper (generated)
-│   └── scaler.pkl        ← feature scaler (generated)
-│
-├── app/
-│   ├── main.py           ← FastAPI routes
-│   ├── models.py         ← business logic (thin translation layer)
-│   ├── schemas.py        ← Pydantic request / response models
-│   └── utils.py          ← singleton wrapper loader, logging
-│
-├── dashboard/
-│   └── streamlit_app.py  ← UI: sliders → API → prediction + interval visualisation
-│
-├── requirements.txt
-├── Dockerfile
-└── README.md
+|-- ml/
+|   |-- config.json       # task type, model type, confidence level, model params
+|   |-- wrapper.py        # UncertaintyWrapper conformal layer
+|   |-- train.py          # trains model, calibrates wrapper, saves wrapper.pkl
+|   |-- conformal.py      # re-exports UncertaintyWrapper for compatibility
+|   `-- wrapper.pkl       # generated trained + calibrated wrapper
+|
+|-- app/
+|   |-- main.py           # FastAPI routes
+|   |-- models.py         # prediction business logic
+|   |-- schemas.py        # Pydantic request and response models
+|   `-- utils.py          # wrapper loading and logging
+|
+|-- dashboard/
+|   `-- streamlit_app.py  # UI for estimates and confidence intervals
+|
+|-- tests/
+|   `-- test_api.py       # API integration tests
+|
+|-- requirements.txt
+|-- Dockerfile
+`-- README.md
 ```
 
 ---
@@ -80,20 +88,23 @@ KnownUnknowns/
 pip install -r requirements.txt
 ```
 
-### 2. Train + calibrate
+### 2. Train and Calibrate
 
 ```bash
 python -m ml.train
 ```
 
-Downloads California Housing (sklearn), trains a RandomForest, calibrates the conformal margin, and saves `ml/wrapper.pkl` + `ml/scaler.pkl`.
+This downloads the Ames Housing dataset, trains the model configured in `ml/config.json`, calibrates the conformal margin, and saves `ml/wrapper.pkl`.
 
-Sample output:
+Sample output format:
+
+```text
+Train: 876 | Calibration: 292 | Test: 292
+Conformal margin q = $45,000  (covers 95% of outcomes)
+Test RMSE: $32,000 | Empirical coverage: 0.950 (target 0.95)
 ```
-Train: 12384 | Calibration: 4128 | Test: 4129
-Conformal margin q = 0.4812  (covers 95% of outcomes)
-Test RMSE: 0.4601 | Empirical coverage: 0.9504 (target 0.95)
-```
+
+The exact values may differ depending on model configuration and dependency versions.
 
 ### 3. Start the API
 
@@ -101,16 +112,17 @@ Test RMSE: 0.4601 | Empirical coverage: 0.9504 (target 0.95)
 uvicorn app.main:app --reload
 ```
 
-→ `http://localhost:8000`  
-→ Interactive docs: `http://localhost:8000/docs`
+API: `http://localhost:8000`
 
-### 4. Start the dashboard
+Interactive docs: `http://localhost:8000/docs`
+
+### 4. Start the Dashboard
 
 ```bash
 streamlit run dashboard/streamlit_app.py
 ```
 
-→ `http://localhost:8501`
+Dashboard: `http://localhost:8501`
 
 ---
 
@@ -121,123 +133,156 @@ docker build -t known-unknowns .
 docker run -p 8000:8000 known-unknowns
 ```
 
+The Docker image trains and calibrates the model during build so the API can serve predictions when the container starts.
+
 ---
 
 ## API Reference
 
-### `POST /predict`
+### `GET /health`
 
-Point prediction only.
+Returns model loading and calibration metadata.
 
-**Request:**
+Example response:
+
 ```json
 {
-  "features": {
-    "MedInc": 3.5, "HouseAge": 25, "AveRooms": 5.5,
-    "AveBedrms": 1.1, "Population": 900, "AveOccup": 2.8,
-    "Latitude": 37.77, "Longitude": -122.42
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "prediction": 2.4731,
-  "prediction_usd": "$247,310"
-}
-```
-
----
-
-### `POST /predict_with_uncertainty`
-
-Point prediction + conformal interval.
-
-**Response:**
-```json
-{
-  "prediction": 2.4731,
-  "prediction_usd": "$247,310",
-  "lower_bound": 1.9919,
-  "upper_bound": 2.9543,
-  "lower_bound_usd": "$199,190",
-  "upper_bound_usd": "$295,430",
-  "interval_width": 0.9624,
-  "margin": 0.4812,
+  "status": "ok",
+  "model_loaded": true,
+  "calibrated": true,
+  "task_type": "regression",
+  "features": ["GrLivArea", "BedroomAbvGr", "FullBath", "OverallQual", "YearBuilt"],
+  "margin": 45000.0,
   "confidence_level": 0.95
 }
 ```
 
-The `[lower_bound, upper_bound]` interval is guaranteed to contain the true median house value ≥ 95% of the time.
+### `POST /predict`
 
----
+Returns the point prediction only.
 
-## Swapping the Model
-
-Edit `ml/config.json` and re-run `python -m ml.train`. No other changes needed.
+Request:
 
 ```json
 {
-  "task_type": "regression",
-  "model_type": "gradient_boosting",
-  "confidence_level": 0.95,
-  "model_params": {
-    "n_estimators": 300,
-    "max_depth": 5,
-    "learning_rate": 0.05
+  "features": {
+    "GrLivArea": 1500,
+    "BedroomAbvGr": 3,
+    "FullBath": 2,
+    "OverallQual": 6,
+    "YearBuilt": 1990
   }
 }
 ```
 
-Available `model_type` values: `random_forest`, `gradient_boosting`, `linear_regression`, `ridge`.
+Response:
+
+```json
+{
+  "prediction": 184250.0,
+  "prediction_usd": "$184,250"
+}
+```
+
+### `POST /predict_with_uncertainty`
+
+Returns the point prediction plus the conformal interval.
+
+Request:
+
+```json
+{
+  "features": {
+    "GrLivArea": 1500,
+    "BedroomAbvGr": 3,
+    "FullBath": 2,
+    "OverallQual": 6,
+    "YearBuilt": 1990
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "prediction": 184250.0,
+  "prediction_usd": "$184,250",
+  "lower_bound": 139250.0,
+  "upper_bound": 229250.0,
+  "lower_bound_usd": "$139,250",
+  "upper_bound_usd": "$229,250",
+  "interval_width": 90000.0,
+  "margin": 45000.0,
+  "confidence_level": 0.95
+}
+```
+
+The interval is calibrated from held-out data. A narrower interval means the model has lower calibrated error around similar examples; a wider interval means the point estimate should be treated with more caution.
+
+---
+
+## Model Configuration
+
+Edit `ml/config.json` and re-run training:
+
+```json
+{
+  "task_type": "regression",
+  "model_type": "random_forest",
+  "confidence_level": 0.95,
+  "random_state": 42,
+  "model_params": {
+    "n_estimators": 300,
+    "max_depth": 14,
+    "min_samples_split": 4,
+    "n_jobs": -1
+  }
+}
+```
+
+Available regression `model_type` values:
+
+- `random_forest`
+- `gradient_boosting`
+- `linear_regression`
+- `ridge`
 
 ---
 
 ## Bring Your Own Model
 
-Train any sklearn-compatible model externally, then wrap it:
+Any sklearn-style regression model can be wrapped as long as it implements `predict(X)`.
 
 ```python
 import pickle
 import numpy as np
 from ml.wrapper import UncertaintyWrapper
 
-# Load your own model
 with open("my_model.pkl", "rb") as f:
-    my_model = pickle.load(f)
+    model = pickle.load(f)
 
-# Load calibration data (X_cal must be already scaled)
 X_cal = np.load("my_calibration_X.npy")
 y_cal = np.load("my_calibration_y.npy")
 
-# Wrap, calibrate, save
-wrapper = UncertaintyWrapper(my_model, task_type="regression", alpha=0.05)
+wrapper = UncertaintyWrapper(model, task_type="regression", alpha=0.05)
 q = wrapper.calibrate(X_cal, y_cal)
-print(f"Conformal margin: {q:.4f}")
-wrapper.save()  # writes ml/wrapper.pkl — API picks it up automatically
+print(f"Conformal margin: {q:.2f}")
+wrapper.save()
 ```
 
-Requirements for the custom model:
-- Implements `predict(X)` → array of shape `(n,)`
-- For classification: also implements `predict_proba(X)` → array of shape `(n, n_classes)`
+For classification experiments, `UncertaintyWrapper` also contains prediction-set logic for models that implement `predict_proba(X)`. The shipped API, dashboard, training pipeline, and tests are currently focused on regression.
 
 ---
 
-## Features (California Housing)
+## Tests
 
-| Feature | Description |
-|---------|-------------|
-| MedInc | Median household income in block group ($10k units) |
-| HouseAge | Median house age in years |
-| AveRooms | Average rooms per household |
-| AveBedrms | Average bedrooms per household |
-| Population | Block group population |
-| AveOccup | Average household size |
-| Latitude | Block group latitude |
-| Longitude | Block group longitude |
+The API tests expect a trained `ml/wrapper.pkl` to exist.
 
-**Target:** Median house value in $100,000 units (so `2.5` = $250,000).
+```bash
+python -m ml.train
+pytest tests/ -v
+```
 
 ---
 
