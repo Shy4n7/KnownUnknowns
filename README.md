@@ -50,6 +50,38 @@ The current implementation trains on the **Ames Housing** dataset from OpenML (`
 
 ---
 
+## System Architecture
+
+```mermaid
+graph LR
+  subgraph Learning
+    A[Past home sales] -->|raw data| B[Clean home details]
+    B -->|clean data| C[Price learner]
+    C -->|trained model| D[Trust range]
+  end
+
+  subgraph Answer
+    E[New home details] -->|new request| F[Question taker]
+    F -->|house details| D
+    D -->|price and range| G[Result screen]
+    G -->|final answer| H[Curious user]
+  end
+```
+
+### How It Works
+
+| Step number | Plain English explanation |
+|-------------|---------------------------|
+| 1 | The project starts with examples of homes and what they sold for. |
+| 2 | It tidies those examples so each home is described in a consistent way. |
+| 3 | It learns patterns from the past examples, like how location and room count affect price. |
+| 4 | It checks how often its guesses were off, so it can be honest about uncertainty. |
+| 5 | When someone enters a new home, it estimates a likely price. |
+| 6 | It also gives a safe range around that price, instead of pretending one number tells the whole story. |
+| 7 | The screen shows the estimate and the range in a way people can compare at a glance. |
+
+---
+
 ## Architecture
 
 ```text
