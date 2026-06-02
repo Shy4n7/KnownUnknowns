@@ -54,31 +54,31 @@ The current implementation trains on the **Ames Housing** dataset from OpenML (`
 
 ```mermaid
 graph LR
-  subgraph Learning
-    A[Past home sales] -->|raw data| B[Clean home details]
-    B -->|clean data| C[Price learner]
-    C -->|trained model| D[Trust range]
+  subgraph Training the model
+    A[Thousands of past home sales] -->|raw data| B[Data cleaner]
+    B -->|tidy home records| C[Pattern learner]
+    C -->|trained model| D[Accuracy checker]
+    D -->|confidence margin| E[Ready to answer]
   end
 
-  subgraph Answer
-    E[New home details] -->|new request| F[Question taker]
-    F -->|house details| D
-    D -->|price and range| G[Result screen]
-    G -->|final answer| H[Curious user]
+  subgraph Answering a new question
+    F[Someone enters a home address and details] -->|home details| E
+    E -->|price estimate and safe range| G[Results dashboard]
+    G -->|final answer| H[Person who asked]
   end
 ```
 
 ### How It Works
 
-| Step number | Plain English explanation |
-|-------------|---------------------------|
-| 1 | The project starts with examples of homes and what they sold for. |
-| 2 | It tidies those examples so each home is described in a consistent way. |
-| 3 | It learns patterns from the past examples, like how location and room count affect price. |
-| 4 | It checks how often its guesses were off, so it can be honest about uncertainty. |
-| 5 | When someone enters a new home, it estimates a likely price. |
-| 6 | It also gives a safe range around that price, instead of pretending one number tells the whole story. |
-| 7 | The screen shows the estimate and the range in a way people can compare at a glance. |
+| Step | Plain English explanation |
+|------|---------------------------|
+| 1 | We start with thousands of real home sales, including what each house looked like and what it sold for. |
+| 2 | We clean up the data so every home is described in the same consistent way before learning from it. |
+| 3 | The model studies the patterns, learning things like how square footage and build year affect price. |
+| 4 | We test the model on homes it has never seen before and measure how far off its guesses usually are. |
+| 5 | That typical error becomes a built-in safety margin, so we can say how confident we are in any future guess. |
+| 6 | When someone enters a new home, the model gives a price estimate plus a safe range, like saying roughly 185,000 give or take 45,000. |
+| 7 | The dashboard shows both the number and the range side by side so the person can see not just the answer but how sure we are. |
 
 ---
 
