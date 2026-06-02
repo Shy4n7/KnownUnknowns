@@ -54,31 +54,40 @@ The current implementation trains on the **Ames Housing** dataset from OpenML (`
 
 ```mermaid
 graph LR
-  subgraph Training the model
-    A[Thousands of past home sales] -->|raw data| B[Data cleaner]
-    B -->|tidy home records| C[Pattern learner]
-    C -->|trained model| D[Accuracy checker]
-    D -->|confidence margin| E[Ready to answer]
+  subgraph Training Pipeline
+    A[(Ames Housing Dataset)] -->|5 raw features| B[Feature Preprocessor]
+    B -->|normalized inputs| C[Sklearn Regression Model]
+    C -->|predictions on holdout set| D[Conformal Calibrator]
+    D -->|margin q at 95 percent coverage| E[(wrapper.pkl)]
   end
 
-  subgraph Answering a new question
-    F[Someone enters a home address and details] -->|home details| E
-    E -->|price estimate and safe range| G[Results dashboard]
-    G -->|final answer| H[Person who asked]
+  subgraph Serving Layer
+    F[Streamlit Dashboard] -->|POST /predict_with_uncertainty| G[FastAPI Backend]
+    G -->|deserialize| E
+    E -->|point estimate plus interval| G
+    G -->|JSON response| F
   end
 ```
 
-### How It Works
+### Technology Stack
 
-| Step | Plain English explanation |
-|------|---------------------------|
-| 1 | We start with thousands of real home sales, including what each house looked like and what it sold for. |
-| 2 | We clean up the data so every home is described in the same consistent way before learning from it. |
-| 3 | The model studies the patterns, learning things like how square footage and build year affect price. |
-| 4 | We test the model on homes it has never seen before and measure how far off its guesses usually are. |
-| 5 | That typical error becomes a built-in safety margin, so we can say how confident we are in any future guess. |
-| 6 | When someone enters a new home, the model gives a price estimate plus a safe range, like saying roughly 185,000 give or take 45,000. |
-| 7 | The dashboard shows both the number and the range side by side so the person can see not just the answer but how sure we are. |
+**ML and Backend**
+
+| Component | Technology |
+|-----------|------------|
+| API server | FastAPI + Uvicorn |
+| Regression models | scikit-learn — Random Forest, Gradient Boosting, Ridge, Linear Regression |
+| Uncertainty layer | Conformal Prediction via `UncertaintyWrapper` |
+| Model artifact | `wrapper.pkl` — trained model plus calibrated margin, serialized to disk |
+| Training data | Ames Housing via OpenML (`house_prices`) |
+
+**Frontend and Deployment**
+
+| Component | Technology |
+|-----------|------------|
+| Dashboard | Streamlit |
+| Containerization | Docker — trains and calibrates at build time, serves at runtime |
+| Configuration | `ml/config.json` — swap model type and confidence level without touching code |
 
 ---
 
