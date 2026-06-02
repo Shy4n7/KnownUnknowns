@@ -54,40 +54,16 @@ The current implementation trains on the **Ames Housing** dataset from OpenML (`
 
 ```mermaid
 graph LR
-  subgraph Training Pipeline
-    A[(Ames Housing Dataset)] -->|5 raw features| B[Feature Preprocessor]
-    B -->|normalized inputs| C[Sklearn Regression Model]
-    C -->|predictions on holdout set| D[Conformal Calibrator]
-    D -->|margin q at 95 percent coverage| E[(wrapper.pkl)]
+  subgraph Training
+    A[(Housing Data)] -->|trains| B[Regression Model]
+    B -->|calibrates| C[Uncertainty Wrapper]
   end
 
-  subgraph Serving Layer
-    F[Streamlit Dashboard] -->|POST /predict_with_uncertainty| G[FastAPI Backend]
-    G -->|deserialize| E
-    E -->|point estimate plus interval| G
-    G -->|JSON response| F
-  end
+  D[Dashboard] -->|request| E[FastAPI]
+  E -->|loads| C
+  C -->|estimate and range| E
+  E -->|response| D
 ```
-
-### Technology Stack
-
-**ML and Backend**
-
-| Component | Technology |
-|-----------|------------|
-| API server | FastAPI + Uvicorn |
-| Regression models | scikit-learn — Random Forest, Gradient Boosting, Ridge, Linear Regression |
-| Uncertainty layer | Conformal Prediction via `UncertaintyWrapper` |
-| Model artifact | `wrapper.pkl` — trained model plus calibrated margin, serialized to disk |
-| Training data | Ames Housing via OpenML (`house_prices`) |
-
-**Frontend and Deployment**
-
-| Component | Technology |
-|-----------|------------|
-| Dashboard | Streamlit |
-| Containerization | Docker — trains and calibrates at build time, serves at runtime |
-| Configuration | `ml/config.json` — swap model type and confidence level without touching code |
 
 ---
 
